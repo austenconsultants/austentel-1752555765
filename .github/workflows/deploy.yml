@@ -1,4 +1,4 @@
-name: 🧠 Intelligent Austentel Deploy
+name: 🏥 Self-Healing Austentel Deploy
 on: 
   push:
     branches: [ main ]
@@ -6,8 +6,9 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Intelligent Deploy
+    name: 🏥 Self-Healing Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     
     steps:
     - name: 📥 Checkout
@@ -18,85 +19,135 @@ jobs:
       with:
         creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
     
-    - name: 🧠 Intelligent Build and Deploy
+    - name: 🏥 Self-Healing Deploy
       run: |
         set -e
         
-        RESOURCE_GROUP="rg-austentel-1752555765"
-        REGISTRY_NAME="acr555765"
-        REGISTRY_LOGIN_SERVER="acr555765.azurecr.io"
+        # Configuration
+        RESOURCE_GROUP="${RESOURCE_GROUP}"
+        REGISTRY_NAME="${REGISTRY_NAME}"
+        REGISTRY_LOGIN_SERVER="${REGISTRY_LOGIN_SERVER}"
         CONTAINER_NAME="austentel-acs"
+        MAX_RETRIES=5
         
-        echo "🔧 Ensuring providers are registered..."
-        az provider register --namespace Microsoft.ContainerInstance --wait || true
+        # Retry function with exponential backoff
+        retry_with_backoff() {
+            local operation=$1
+            local command=$2
+            local max_attempts=${3:-$MAX_RETRIES}
+            
+            for attempt in $(seq 1 $max_attempts); do
+                echo "🔄 Attempting $operation (try $attempt/$max_attempts)"
+                
+                if eval "$command"; then
+                    echo "✅ $operation succeeded on attempt $attempt"
+                    return 0
+                else
+                    if [ $attempt -eq $max_attempts ]; then
+                        echo "❌ $operation failed after $max_attempts attempts"
+                        return 1
+                    fi
+                    
+                    local delay=$((10 * (2 ** (attempt - 1))))
+                    echo "⏳ Retrying in ${delay}s..."
+                    sleep $delay
+                fi
+            done
+        }
         
-        echo "🔍 Checking existing container..."
+        # Enhanced health check
+        check_container_health() {
+            local ip=$1
+            local max_checks=12
+            
+            for i in $(seq 1 $max_checks); do
+                echo "🧪 Health check $i/$max_checks for $ip"
+                
+                if curl -f --max-time 15 "http://$ip/health" >/dev/null 2>&1; then
+                    echo "✅ Health endpoint responding"
+                    return 0
+                elif curl -f --max-time 15 "http://$ip/api/health" >/dev/null 2>&1; then
+                    echo "✅ API health endpoint responding"
+                    return 0
+                elif curl -f --max-time 15 "http://$ip/" >/dev/null 2>&1; then
+                    echo "✅ Application responding"
+                    return 0
+                else
+                    echo "⏳ Attempt $i/$max_checks..."
+                    sleep 20
+                fi
+            done
+            
+            echo "❌ Health checks failed"
+            return 1
+        }
+        
+        echo "🔧 Ensuring providers registered..."
+        retry_with_backoff "Provider registration" \
+            "az provider register --namespace Microsoft.ContainerInstance --wait" 3
+        
+        echo "🔍 Checking existing container health..."
         CONTAINER_STATE=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query instanceView.state --output tsv 2>/dev/null || echo "NotFound")
         
         if [ "$CONTAINER_STATE" = "Running" ]; then
           CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
           echo "🧪 Testing existing container at $CONTAINER_IP..."
           
-          if curl -f --max-time 10 http://$CONTAINER_IP/health >/dev/null 2>&1 || curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
-            echo "✅ Container is healthy and working!"
+          if check_container_health "$CONTAINER_IP"; then
+            echo "✅ Container healthy - SKIPPING DEPLOYMENT"
             echo "🌐 Access at: http://$CONTAINER_IP"
-            echo "⏩ Skipping deployment - container already working perfectly"
             exit 0
           else
-            echo "⚠️ Container exists but not responding - will recreate"
+            echo "⚠️ Container unhealthy - proceeding with redeployment"
           fi
         fi
         
         echo "🔐 Logging into registry..."
-        az acr login --name $REGISTRY_NAME
+        retry_with_backoff "Registry login" "az acr login --name $REGISTRY_NAME"
         
-        echo "🏗️ Building Docker image..."
-        docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest .
+        echo "🏗️ Building image..."
+        retry_with_backoff "Image build" \
+            "docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest ."
         
-        echo "📤 Pushing to registry..."
-        docker push $REGISTRY_LOGIN_SERVER/austentel:latest
+        echo "📤 Pushing image..."
+        retry_with_backoff "Image push" \
+            "docker push $REGISTRY_LOGIN_SERVER/austentel:latest"
         
         echo "🗑️ Removing old container..."
-        az container delete --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --yes || true
-        sleep 15
+        retry_with_backoff "Container deletion" \
+            "az container delete --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --yes" 3
+        sleep 25
         
-        echo "🚀 Creating new container with fixed parameters..."
-        az container create \
-          --resource-group $RESOURCE_GROUP \
-          --name $CONTAINER_NAME \
-          --image $REGISTRY_LOGIN_SERVER/austentel:latest \
-          --registry-login-server $REGISTRY_LOGIN_SERVER \
-          --registry-username ${{ secrets.REGISTRY_USERNAME }} \
-          --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
-          --ports 80 \
-          --protocol TCP \
-          --cpu 1 \
-          --memory 1.5 \
-          --ip-address Public \
-          --restart-policy Always \
-          --location eastus \
-          --environment-variables NODE_ENV=production
+        echo "🏥 Creating self-healing container..."
+        retry_with_backoff "Container creation" \
+            "az container create \
+              --resource-group $RESOURCE_GROUP \
+              --name $CONTAINER_NAME \
+              --image $REGISTRY_LOGIN_SERVER/austentel:latest \
+              --registry-login-server $REGISTRY_LOGIN_SERVER \
+              --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+              --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+              --ports 80 \
+              --protocol TCP \
+              --cpu 1 \
+              --memory 1.5 \
+              --ip-address Public \
+              --restart-policy Always \
+              --location eastus \
+              --environment-variables NODE_ENV=production HEALTH_CHECK_ENABLED=true"
         
-        echo "⏳ Waiting for container to start..."
-        sleep 45
+        echo "⏳ Waiting for container startup..."
+        sleep 90
         
         CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
         echo "📍 Container IP: $CONTAINER_IP"
         
-        echo "🧪 Testing new deployment..."
-        for i in {1..8}; do
-          if curl -f --max-time 10 http://$CONTAINER_IP/health >/dev/null 2>&1; then
-            echo "✅ Health check passed!"
-            break
-          elif curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
-            echo "✅ Application responding!"
-            break
-          else
-            echo "⏳ Attempt $i/8 - waiting for app to start..."
-            sleep 15
-          fi
-        done
-        
-        echo "🎉 Intelligent deployment complete!"
-        echo "🌐 Access at: http://$CONTAINER_IP"
-        echo "🌐 Domain: https://acs1.austentel.com"
+        echo "🏥 Running comprehensive health checks..."
+        if check_container_health "$CONTAINER_IP"; then
+            echo "🎉 SELF-HEALING DEPLOYMENT COMPLETE!"
+            echo "🌐 Access: http://$CONTAINER_IP"
+            echo "🏥 Health monitoring: http://$CONTAINER_IP/health"
+        else
+            echo "❌ Deployment validation failed"
+            exit 1
+        fi

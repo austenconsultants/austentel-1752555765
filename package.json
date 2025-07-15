@@ -1,7 +1,7 @@
 {
-  "name": "austentel-acs-intelligent",
+  "name": "austentel-acs-ultimate",
   "version": "1.0.0",
-  "description": "Austentel ACS VoiceHub Pro - Intelligent Self-Healing Deployment",
+  "description": "Austentel ACS VoiceHub Pro - Self-Healing Ultimate Deployment",
   "homepage": "https://acs1.austentel.com",
   "dependencies": {
     "react": "^18.2.0",

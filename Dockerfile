@@ -7,6 +7,10 @@ COPY . .
 RUN npm run build
 
 FROM nginx:alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 COPY --from=builder /app/build /usr/share/nginx/html
 
 RUN echo 'server { \
@@ -18,8 +22,21 @@ RUN echo 'server { \
     gzip on; \
     gzip_types text/plain text/css application/json application/javascript; \
     location / { try_files $uri $uri/ /index.html; } \
-    location /health { return 200 "healthy"; add_header Content-Type text/plain; } \
+    location /health { \
+        access_log off; \
+        return 200 "{\"status\":\"healthy\",\"timestamp\":\"$(date -Iseconds)\"}"; \
+        add_header Content-Type application/json; \
+    } \
+    location /api/health { \
+        access_log off; \
+        return 200 "{\"api\":\"healthy\",\"version\":\"1.0.0\"}"; \
+        add_header Content-Type application/json; \
+    } \
 }' > /etc/nginx/conf.d/default.conf
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
