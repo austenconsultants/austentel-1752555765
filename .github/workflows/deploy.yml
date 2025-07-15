@@ -1,0 +1,59 @@
+name: 🛡️ Bulletproof Austentel Deploy
+on: 
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGISTRY_NAME: acr555765
+  REGISTRY_LOGIN_SERVER: acr555765.azurecr.io
+  RESOURCE_GROUP: rg-austentel-1752555765
+  CLOUDFLARE_IP: 172.191.198.54
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to Azure
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔐 Azure Login
+      uses: azure/login@v1
+      with:
+        creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
+    
+    - name: 🏗️ Build and Deploy
+      run: |
+        set -e
+        
+        echo "🔐 Logging into container registry..."
+        az acr login --name ${{ env.REGISTRY_NAME }}
+        
+        echo "🏗️ Building Docker image..."
+        docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest .
+        docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }} .
+        
+        echo "📤 Pushing images to registry..."
+        docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest
+        docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }}
+        
+        echo "🗑️ Removing old container..."
+        az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name austentel-acs --yes || true
+        sleep 15
+        
+        echo "🚀 Creating new container..."
+        az container create           --resource-group ${{ env.RESOURCE_GROUP }}           --name austentel-acs           --image ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --cpu 1           --memory 2           --public-ip-address ${{ env.CLOUDFLARE_IP }}           --restart-policy Always           --environment-variables             NODE_ENV=production             REACT_APP_VERSION=${{ github.sha }}             REACT_APP_BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        
+        echo "⏳ Waiting for container to be ready..."
+        sleep 30
+        
+        echo "🧪 Testing deployment..."
+        if curl -f http://${{ env.CLOUDFLARE_IP }}/health; then
+          echo "✅ Deployment successful!"
+          echo "🌐 Application available at: https://acs1.austentel.com"
+        else
+          echo "❌ Health check failed"
+          exit 1
+        fi
