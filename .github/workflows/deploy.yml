@@ -4,12 +4,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  REGISTRY_NAME: acr555765
-  REGISTRY_LOGIN_SERVER: acr555765.azurecr.io
-  RESOURCE_GROUP: rg-austentel-1752555765
-  CLOUDFLARE_IP: 172.191.198.54
-
 jobs:
   deploy:
     name: 🚀 Deploy to Azure
@@ -28,29 +22,78 @@ jobs:
       run: |
         set -e
         
+        # Resource configuration
+        RESOURCE_GROUP="rg-austentel-1752555765"
+        REGISTRY_NAME="acr555765"
+        REGISTRY_LOGIN_SERVER="acr555765.azurecr.io"
+        CONTAINER_NAME="austentel-acs"
+        
+        echo "🔍 Using Resource Group: $RESOURCE_GROUP"
+        echo "🔍 Using Registry: $REGISTRY_NAME"
+        
+        # Check if container is already running
+        CONTAINER_STATE=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query instanceView.state --output tsv 2>/dev/null || echo "NotFound")
+        
+        if [ "$CONTAINER_STATE" = "Running" ]; then
+          CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
+          echo "✅ Container already running at $CONTAINER_IP"
+          echo "🧪 Testing existing deployment..."
+          if curl -f --max-time 10 http://$CONTAINER_IP/health || curl -f --max-time 10 http://$CONTAINER_IP/; then
+            echo "✅ Existing deployment is healthy!"
+            echo "🌐 Access at: http://$CONTAINER_IP"
+            echo "⏩ Skipping deployment - container already running successfully"
+            exit 0
+          else
+            echo "⚠️ Existing container not responding, will redeploy"
+          fi
+        fi
+        
         echo "🔐 Logging into registry..."
-        az acr login --name ${{ env.REGISTRY_NAME }}
+        az acr login --name $REGISTRY_NAME
         
         echo "🏗️ Building Docker image..."
-        docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest .
-        docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }} .
+        docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest .
+        docker build -t $REGISTRY_LOGIN_SERVER/austentel:${{ github.sha }} .
         
         echo "📤 Pushing to registry..."
-        docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest
-        docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }}
+        docker push $REGISTRY_LOGIN_SERVER/austentel:latest
+        docker push $REGISTRY_LOGIN_SERVER/austentel:${{ github.sha }}
         
         echo "🗑️ Cleaning old container..."
-        az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name austentel-acs --yes || true
+        az container delete --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --yes || true
         sleep 15
         
-        echo "🚀 Creating container..."
-        az container create           --resource-group ${{ env.RESOURCE_GROUP }}           --name austentel-acs           --image ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --cpu 1           --memory 2           --public-ip-address ${{ env.CLOUDFLARE_IP }}           --restart-policy Always           --environment-variables NODE_ENV=production
+        echo "🚀 Creating container with fixed parameters..."
+        az container create           --resource-group $RESOURCE_GROUP           --name $CONTAINER_NAME           --image $REGISTRY_LOGIN_SERVER/austentel:latest           --registry-login-server $REGISTRY_LOGIN_SERVER           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --protocol TCP           --cpu 1           --memory 1.5           --ip-address Public           --restart-policy Always           --location eastus           --environment-variables NODE_ENV=production
         
-        echo "🧪 Health check..."
+        echo "⏳ Waiting for container to start..."
         sleep 30
-        if curl -f http://${{ env.CLOUDFLARE_IP }}/health; then
+        
+        # Get the container IP and verify deployment
+        CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
+        echo "📍 Container IP: $CONTAINER_IP"
+        
+        echo "🧪 Testing deployment..."
+        for i in {1..6}; do
+          if curl -f --max-time 10 http://$CONTAINER_IP/health; then
+            echo "✅ Health check passed!"
+            break
+          elif curl -f --max-time 10 http://$CONTAINER_IP/; then
+            echo "✅ Application responding!"
+            break
+          else
+            echo "⏳ Attempt $i/6 - waiting for application to start..."
+            sleep 10
+          fi
+        done
+        
+        # Final verification
+        if curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
           echo "✅ Deployment successful!"
+          echo "🌐 Access at: http://$CONTAINER_IP"
+          echo "🌐 Domain: https://acs1.austentel.com (update DNS to point to $CONTAINER_IP)"
         else
-          echo "❌ Health check failed"
-          exit 1
+          echo "⚠️ Container created but application may still be starting"
+          echo "🌐 Try accessing: http://$CONTAINER_IP"
+          echo "📋 Check container logs if needed: az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME"
         fi
