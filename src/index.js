@@ -33,9 +33,9 @@ const AustentelApp = () => {
       minHeight: '90vh'
     }}>
       <div style={{textAlign: 'center', marginBottom: '50px'}}>
-        <h1 style={{fontSize: '3.5em', margin: '20px 0'}}>🛡️ AUSTENTEL ACS</h1>
-        <h2 style={{fontSize: '1.6em', opacity: '0.9'}}>Bulletproof Self-Healing Deployment!</h2>
-        <p style={{fontSize: '1.1em', opacity: '0.8'}}>Handles provider registration issues with multiple fallback strategies</p>
+        <h1 style={{fontSize: '3.5em', margin: '20px 0'}}>🌐 AUSTENTEL ACS</h1>
+        <h2 style={{fontSize: '1.6em', opacity: '0.9'}}>App Service Deployment Success!</h2>
+        <p style={{fontSize: '1.1em', opacity: '0.8'}}>Bypasses Container Instance - uses reliable App Service hosting</p>
         <div style={{
           display: 'inline-block',
           padding: '10px 20px',
@@ -44,22 +44,22 @@ const AustentelApp = () => {
           border: `2px solid ${healthStatus === 'healthy' ? '#00ff00' : '#ffff00'}`,
           marginTop: '20px'
         }}>
-          {healthStatus === 'healthy' ? '✅ System Bulletproof' : '🔄 Health Check...'}
+          {healthStatus === 'healthy' ? '✅ App Service Healthy' : '🔄 Health Check...'}
         </div>
       </div>
       
       <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '30px'}}>
         <div style={{background: 'rgba(255,255,255,0.12)', padding: '30px', borderRadius: '12px'}}>
-          <h3>🛡️ Bulletproof Features</h3>
+          <h3>🌐 App Service Benefits</h3>
           <ul style={{listStyle: 'none', padding: 0, lineHeight: '2'}}>
-            <li>🔧 Aggressive provider registration</li>
-            <li>🎯 Multiple deployment fallbacks</li>
-            <li>🔄 Container Instance → App Service → VM</li>
-            <li>🏥 Self-healing capabilities</li>
-            <li>📊 Permission escalation</li>
-            <li>🛡️ Failure isolation</li>
-            <li>⚡ Automatic recovery</li>
-            <li>📈 Comprehensive monitoring</li>
+            <li>🚫 No provider registration needed</li>
+            <li>🛡️ Enterprise-grade reliability</li>
+            <li>📈 Auto-scaling capabilities</li>
+            <li>🔒 Built-in security features</li>
+            <li>💰 Cost-effective hosting</li>
+            <li>🌍 Global CDN integration</li>
+            <li>📊 Advanced monitoring</li>
+            <li>🔄 Easy deployment slots</li>
           </ul>
         </div>
 
@@ -71,23 +71,23 @@ const AustentelApp = () => {
           <p><strong>Language:</strong> {systemInfo.language}</p>
           <p><strong>Timezone:</strong> {systemInfo.timezone}</p>
           <p><strong>Deployed:</strong> {systemInfo.timestamp}</p>
-          <p><strong>Status:</strong> <span style={{color: '#00ff00'}}>Bulletproof</span></p>
+          <p><strong>Hosting:</strong> <span style={{color: '#00ff00'}}>Azure App Service</span></p>
         </div>
 
         <div style={{background: 'rgba(255,255,255,0.12)', padding: '30px', borderRadius: '12px'}}>
-          <h3>🚀 Deployment Strategies</h3>
+          <h3>🚀 App Service Features</h3>
           <div style={{display: 'grid', gridTemplateColumns: '1fr', gap: '15px'}}>
             <div>
-              <h4>🎯 Primary: Container Instance</h4>
-              <p style={{fontSize: '0.9em', opacity: '0.8'}}>Fast, lightweight containers</p>
+              <h4>⚡ Performance</h4>
+              <p style={{fontSize: '0.9em', opacity: '0.8'}}>Fast, scalable container hosting</p>
             </div>
             <div>
-              <h4>🛡️ Fallback: App Service</h4>
-              <p style={{fontSize: '0.9em', opacity: '0.8'}}>When Container Instance unavailable</p>
+              <h4>🛡️ Security</h4>
+              <p style={{fontSize: '0.9em', opacity: '0.8'}}>Built-in SSL, authentication</p>
             </div>
             <div>
-              <h4>⚡ Ultimate: Virtual Machine</h4>
-              <p style={{fontSize: '0.9em', opacity: '0.8'}}>Maximum compatibility</p>
+              <h4>📊 Monitoring</h4>
+              <p style={{fontSize: '0.9em', opacity: '0.8'}}>Application Insights integration</p>
             </div>
           </div>
         </div>
@@ -101,18 +101,18 @@ const AustentelApp = () => {
         marginTop: '40px',
         border: '2px solid rgba(255,255,255,0.3)'
       }}>
-        <h2 style={{fontSize: '2.5em', margin: '20px 0'}}>🎉 BULLETPROOF DEPLOYMENT SUCCESS! 🎉</h2>
+        <h2 style={{fontSize: '2.5em', margin: '20px 0'}}>🎉 APP SERVICE DEPLOYMENT SUCCESS! 🎉</h2>
         <p style={{fontSize: '1.3em', opacity: '0.95'}}>
-          Austentel ACS VoiceHub Pro deployed with bulletproof reliability
+          Austentel ACS VoiceHub Pro deployed on Azure App Service
         </p>
         <p style={{fontSize: '1.1em', opacity: '0.9'}}>
           Accessible at: <strong>acs1.austentel.com</strong>
         </p>
         <div style={{marginTop: '30px', opacity: '0.8'}}>
-          <p>🛡️ Provider registration handled automatically</p>
-          <p>🔄 Multiple deployment fallback strategies</p>
-          <p>🏥 Self-healing infrastructure</p>
-          <p>📊 Comprehensive permission management</p>
+          <p>🌐 Reliable App Service hosting</p>
+          <p>🚫 No provider registration issues</p>
+          <p>🛡️ Enterprise-grade infrastructure</p>
+          <p>📈 Auto-scaling ready</p>
         </div>
       </div>
     </div>

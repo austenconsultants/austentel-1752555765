@@ -1,4 +1,4 @@
-name: 🛡️ Bulletproof Austentel Deploy
+name: 🌐 App Service Austentel Deploy
 on: 
   push:
     branches: [ main ]
@@ -6,9 +6,9 @@ on:
 
 jobs:
   deploy:
-    name: 🛡️ Bulletproof Deploy
+    name: 🌐 App Service Deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     
     steps:
     - name: 📥 Checkout
@@ -19,7 +19,7 @@ jobs:
       with:
         creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
     
-    - name: 🛡️ Bulletproof Deploy with Provider Fallbacks
+    - name: 🌐 App Service Deploy (No Provider Registration Needed)
       run: |
         set -e
         
@@ -27,9 +27,9 @@ jobs:
         RESOURCE_GROUP="${RESOURCE_GROUP}"
         REGISTRY_NAME="${REGISTRY_NAME}"
         REGISTRY_LOGIN_SERVER="${REGISTRY_LOGIN_SERVER}"
-        DEPLOYMENT_METHOD="${DEPLOYMENT_METHOD}"
+        WEB_APP_NAME="${WEB_APP_NAME}"
         
-        # Enhanced retry function
+        # Retry function
         retry_with_backoff() {
             local operation=$1
             local command=$2
@@ -51,111 +51,64 @@ jobs:
             done
         }
         
-        # Bulletproof provider registration
-        echo "🛡️ Bulletproof provider registration..."
+        echo "🌐 App Service deployment - no provider registration needed!"
         
-        REQUIRED_PROVIDERS=("Microsoft.ContainerInstance" "Microsoft.ContainerRegistry" "Microsoft.Network" "Microsoft.Web")
-        FAILED_PROVIDERS=()
+        echo "🔍 Checking existing web app..."
+        if az webapp show --name "$WEB_APP_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
+            echo "✅ Web app exists: $WEB_APP_NAME"
+        else
+            echo "❌ Web app not found: $WEB_APP_NAME"
+            exit 1
+        fi
         
-        for provider in "${REQUIRED_PROVIDERS[@]}"; do
-            echo "🔍 Checking provider: $provider"
-            
-            if az provider show --namespace "$provider" --query registrationState --output tsv | grep -q "Registered"; then
-                echo "✅ $provider already registered"
-                continue
-            fi
-            
-            echo "🔧 Registering $provider..."
-            if az provider register --namespace "$provider" 2>/dev/null; then
-                echo "✅ $provider registration initiated"
-                
-                # Wait for registration with timeout
-                timeout=300
-                while [ $timeout -gt 0 ]; do
-                    if az provider show --namespace "$provider" --query registrationState --output tsv | grep -q "Registered"; then
-                        echo "✅ $provider registered successfully"
-                        break
-                    fi
-                    sleep 10
-                    timeout=$((timeout - 10))
-                done
+        # FIXED: ACR login with proper registry name variable
+        echo "🔐 Logging into Container Registry..."
+        retry_with_backoff "Registry login" "az acr login --name '$REGISTRY_NAME'"
+        
+        echo "🏗️ Building container image..."
+        retry_with_backoff "Image build" \
+            "docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest ."
+        
+        echo "📤 Pushing to registry..."
+        retry_with_backoff "Image push" \
+            "docker push $REGISTRY_LOGIN_SERVER/austentel:latest"
+        
+        echo "🌐 Configuring App Service container..."
+        retry_with_backoff "App Service container config" \
+            "az webapp config container set \
+              --name '$WEB_APP_NAME' \
+              --resource-group '$RESOURCE_GROUP' \
+              --docker-custom-image-name '$REGISTRY_LOGIN_SERVER/austentel:latest' \
+              --docker-registry-server-url 'https://$REGISTRY_LOGIN_SERVER' \
+              --docker-registry-server-user '${{ secrets.REGISTRY_USERNAME }}' \
+              --docker-registry-server-password '${{ secrets.REGISTRY_PASSWORD }}'"
+        
+        echo "🔄 Restarting App Service..."
+        retry_with_backoff "App Service restart" \
+            "az webapp restart --name '$WEB_APP_NAME' --resource-group '$RESOURCE_GROUP'"
+        
+        # Wait for deployment
+        echo "⏳ Waiting for App Service to start..."
+        sleep 60
+        
+        # Get URL and test
+        WEB_APP_URL=$(az webapp show --name "$WEB_APP_NAME" --resource-group "$RESOURCE_GROUP" --query defaultHostName --output tsv)
+        echo "📍 App Service URL: https://$WEB_APP_URL"
+        
+        # Health check
+        echo "🧪 Testing App Service health..."
+        for i in {1..10}; do
+            if curl -f --max-time 30 "https://$WEB_APP_URL/health" >/dev/null 2>&1; then
+                echo "✅ Health check passed!"
+                break
+            elif curl -f --max-time 30 "https://$WEB_APP_URL/" >/dev/null 2>&1; then
+                echo "✅ App Service responding!"
+                break
             else
-                echo "⚠️ Failed to register $provider - adding to fallback list"
-                FAILED_PROVIDERS+=("$provider")
+                echo "⏳ Health check attempt $i/10..."
+                sleep 30
             fi
         done
         
-        # Determine deployment method based on available providers
-        if [[ " ${FAILED_PROVIDERS[*]} " =~ " Microsoft.ContainerInstance " ]]; then
-            if [[ " ${FAILED_PROVIDERS[*]} " =~ " Microsoft.Web " ]]; then
-                echo "🛡️ Both Container Instance and App Service unavailable - manual intervention needed"
-                exit 1
-            else
-                echo "🛡️ Using App Service deployment (Container Instance unavailable)"
-                DEPLOYMENT_METHOD="app_service"
-            fi
-        fi
-        
-        echo "🔐 Registry login..."
-        retry_with_backoff "Registry login" "az acr login --name $REGISTRY_NAME"
-        
-        echo "🏗️ Building and pushing image..."
-        retry_with_backoff "Image build" "docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest ."
-        retry_with_backoff "Image push" "docker push $REGISTRY_LOGIN_SERVER/austentel:latest"
-        
-        # Deploy based on method
-        case $DEPLOYMENT_METHOD in
-            "container_instance")
-                echo "🚀 Deploying to Container Instance..."
-                
-                # Remove old container
-                echo "🗑️ Cleaning old container..."
-                az container delete --resource-group $RESOURCE_GROUP --name austentel-acs --yes || true
-                sleep 30
-                
-                # Create new container
-                retry_with_backoff "Container creation" \
-                    "az container create \
-                      --resource-group $RESOURCE_GROUP \
-                      --name austentel-acs \
-                      --image $REGISTRY_LOGIN_SERVER/austentel:latest \
-                      --registry-login-server $REGISTRY_LOGIN_SERVER \
-                      --registry-username ${{ secrets.REGISTRY_USERNAME }} \
-                      --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
-                      --ports 80 \
-                      --protocol TCP \
-                      --cpu 1 \
-                      --memory 1.5 \
-                      --ip-address Public \
-                      --restart-policy Always \
-                      --location eastus \
-                      --environment-variables NODE_ENV=production"
-                
-                sleep 90
-                CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name austentel-acs --query ipAddress.ip --output tsv)
-                echo "📍 Container deployed at: $CONTAINER_IP"
-                ;;
-                
-            "app_service")
-                echo "🛡️ Deploying to App Service..."
-                
-                # Configure container deployment
-                retry_with_backoff "App Service container config" \
-                    "az webapp config container set \
-                      --name app-austentel-* \
-                      --resource-group $RESOURCE_GROUP \
-                      --docker-custom-image-name $REGISTRY_LOGIN_SERVER/austentel:latest \
-                      --docker-registry-server-url https://$REGISTRY_LOGIN_SERVER \
-                      --docker-registry-server-user ${{ secrets.REGISTRY_USERNAME }} \
-                      --docker-registry-server-password ${{ secrets.REGISTRY_PASSWORD }}"
-                
-                # Restart app service
-                retry_with_backoff "App Service restart" \
-                    "az webapp restart --name app-austentel-* --resource-group $RESOURCE_GROUP"
-                
-                WEBAPP_URL=$(az webapp show --name app-austentel-* --resource-group $RESOURCE_GROUP --query defaultHostName --output tsv)
-                echo "📍 App Service deployed at: https://$WEBAPP_URL"
-                ;;
-        esac
-        
-        echo "🎉 BULLETPROOF DEPLOYMENT COMPLETE!"
+        echo "🎉 APP SERVICE DEPLOYMENT COMPLETE!"
+        echo "🌐 Access your app at: https://$WEB_APP_URL"

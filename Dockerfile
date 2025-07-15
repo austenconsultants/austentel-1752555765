@@ -23,7 +23,7 @@ RUN echo 'server { \
     location / { try_files $uri $uri/ /index.html; } \
     location /health { \
         access_log off; \
-        return 200 "{\"status\":\"healthy\",\"method\":\"bulletproof\"}"; \
+        return 200 "{\"status\":\"healthy\",\"hosting\":\"app_service\"}"; \
         add_header Content-Type application/json; \
     } \
 }' > /etc/nginx/conf.d/default.conf

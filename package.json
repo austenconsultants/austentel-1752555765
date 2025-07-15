@@ -1,7 +1,7 @@
 {
-  "name": "austentel-acs-ultimate",
+  "name": "austentel-acs-app-service",
   "version": "1.0.0",
-  "description": "Austentel ACS VoiceHub Pro - Bulletproof Self-Healing Deployment",
+  "description": "Austentel ACS VoiceHub Pro - App Service Deployment",
   "homepage": "https://acs1.austentel.com",
   "dependencies": {
     "react": "^18.2.0",
