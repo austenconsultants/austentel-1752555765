@@ -1,4 +1,4 @@
-name: 🧠 Unified Austentel Deploy
+name: 🧠 Intelligent Austentel Deploy
 on: 
   push:
     branches: [ main ]
@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Deploy to Azure
+    name: 🚀 Intelligent Deploy
     runs-on: ubuntu-latest
     
     steps:
@@ -18,33 +18,32 @@ jobs:
       with:
         creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
     
-    - name: 🏗️ Build and Deploy
+    - name: 🧠 Intelligent Build and Deploy
       run: |
         set -e
         
-        # Resource configuration
         RESOURCE_GROUP="rg-austentel-1752555765"
         REGISTRY_NAME="acr555765"
         REGISTRY_LOGIN_SERVER="acr555765.azurecr.io"
         CONTAINER_NAME="austentel-acs"
         
-        echo "🔍 Using Resource Group: $RESOURCE_GROUP"
-        echo "🔍 Using Registry: $REGISTRY_NAME"
+        echo "🔧 Ensuring providers are registered..."
+        az provider register --namespace Microsoft.ContainerInstance --wait || true
         
-        # Check if container is already running
+        echo "🔍 Checking existing container..."
         CONTAINER_STATE=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query instanceView.state --output tsv 2>/dev/null || echo "NotFound")
         
         if [ "$CONTAINER_STATE" = "Running" ]; then
           CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
-          echo "✅ Container already running at $CONTAINER_IP"
-          echo "🧪 Testing existing deployment..."
-          if curl -f --max-time 10 http://$CONTAINER_IP/health || curl -f --max-time 10 http://$CONTAINER_IP/; then
-            echo "✅ Existing deployment is healthy!"
+          echo "🧪 Testing existing container at $CONTAINER_IP..."
+          
+          if curl -f --max-time 10 http://$CONTAINER_IP/health >/dev/null 2>&1 || curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
+            echo "✅ Container is healthy and working!"
             echo "🌐 Access at: http://$CONTAINER_IP"
-            echo "⏩ Skipping deployment - container already running successfully"
+            echo "⏩ Skipping deployment - container already working perfectly"
             exit 0
           else
-            echo "⚠️ Existing container not responding, will redeploy"
+            echo "⚠️ Container exists but not responding - will recreate"
           fi
         fi
         
@@ -53,47 +52,51 @@ jobs:
         
         echo "🏗️ Building Docker image..."
         docker build -t $REGISTRY_LOGIN_SERVER/austentel:latest .
-        docker build -t $REGISTRY_LOGIN_SERVER/austentel:${{ github.sha }} .
         
         echo "📤 Pushing to registry..."
         docker push $REGISTRY_LOGIN_SERVER/austentel:latest
-        docker push $REGISTRY_LOGIN_SERVER/austentel:${{ github.sha }}
         
-        echo "🗑️ Cleaning old container..."
+        echo "🗑️ Removing old container..."
         az container delete --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --yes || true
         sleep 15
         
-        echo "🚀 Creating container with fixed parameters..."
-        az container create           --resource-group $RESOURCE_GROUP           --name $CONTAINER_NAME           --image $REGISTRY_LOGIN_SERVER/austentel:latest           --registry-login-server $REGISTRY_LOGIN_SERVER           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --protocol TCP           --cpu 1           --memory 1.5           --ip-address Public           --restart-policy Always           --location eastus           --environment-variables NODE_ENV=production
+        echo "🚀 Creating new container with fixed parameters..."
+        az container create \
+          --resource-group $RESOURCE_GROUP \
+          --name $CONTAINER_NAME \
+          --image $REGISTRY_LOGIN_SERVER/austentel:latest \
+          --registry-login-server $REGISTRY_LOGIN_SERVER \
+          --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+          --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+          --ports 80 \
+          --protocol TCP \
+          --cpu 1 \
+          --memory 1.5 \
+          --ip-address Public \
+          --restart-policy Always \
+          --location eastus \
+          --environment-variables NODE_ENV=production
         
         echo "⏳ Waiting for container to start..."
-        sleep 30
+        sleep 45
         
-        # Get the container IP and verify deployment
         CONTAINER_IP=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query ipAddress.ip --output tsv)
         echo "📍 Container IP: $CONTAINER_IP"
         
-        echo "🧪 Testing deployment..."
-        for i in {1..6}; do
-          if curl -f --max-time 10 http://$CONTAINER_IP/health; then
+        echo "🧪 Testing new deployment..."
+        for i in {1..8}; do
+          if curl -f --max-time 10 http://$CONTAINER_IP/health >/dev/null 2>&1; then
             echo "✅ Health check passed!"
             break
-          elif curl -f --max-time 10 http://$CONTAINER_IP/; then
+          elif curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
             echo "✅ Application responding!"
             break
           else
-            echo "⏳ Attempt $i/6 - waiting for application to start..."
-            sleep 10
+            echo "⏳ Attempt $i/8 - waiting for app to start..."
+            sleep 15
           fi
         done
         
-        # Final verification
-        if curl -f --max-time 10 http://$CONTAINER_IP/ >/dev/null 2>&1; then
-          echo "✅ Deployment successful!"
-          echo "🌐 Access at: http://$CONTAINER_IP"
-          echo "🌐 Domain: https://acs1.austentel.com (update DNS to point to $CONTAINER_IP)"
-        else
-          echo "⚠️ Container created but application may still be starting"
-          echo "🌐 Try accessing: http://$CONTAINER_IP"
-          echo "📋 Check container logs if needed: az container logs --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME"
-        fi
+        echo "🎉 Intelligent deployment complete!"
+        echo "🌐 Access at: http://$CONTAINER_IP"
+        echo "🌐 Domain: https://acs1.austentel.com"

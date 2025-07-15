@@ -1,7 +1,7 @@
 {
-  "name": "austentel-acs-bulletproof",
+  "name": "austentel-acs-intelligent",
   "version": "1.0.0",
-  "description": "Austentel ACS VoiceHub Pro - Bulletproof macOS Deployment",
+  "description": "Austentel ACS VoiceHub Pro - Intelligent Self-Healing Deployment",
   "homepage": "https://acs1.austentel.com",
   "dependencies": {
     "react": "^18.2.0",
@@ -14,15 +14,7 @@
     "test": "react-scripts test --watchAll=false"
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
   }
 }
