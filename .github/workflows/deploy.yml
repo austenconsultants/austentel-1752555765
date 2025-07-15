@@ -1,4 +1,4 @@
-name: 🛡️ Bulletproof Austentel Deploy
+name: 🧠 Unified Austentel Deploy
 on: 
   push:
     branches: [ main ]
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 📥 Checkout code
+    - name: 📥 Checkout
       uses: actions/checkout@v4
       
     - name: 🔐 Azure Login
@@ -28,31 +28,28 @@ jobs:
       run: |
         set -e
         
-        echo "🔐 Logging into container registry..."
+        echo "🔐 Logging into registry..."
         az acr login --name ${{ env.REGISTRY_NAME }}
         
         echo "🏗️ Building Docker image..."
         docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest .
         docker build -t ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }} .
         
-        echo "📤 Pushing images to registry..."
+        echo "📤 Pushing to registry..."
         docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest
         docker push ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:${{ github.sha }}
         
-        echo "🗑️ Removing old container..."
+        echo "🗑️ Cleaning old container..."
         az container delete --resource-group ${{ env.RESOURCE_GROUP }} --name austentel-acs --yes || true
         sleep 15
         
-        echo "🚀 Creating new container..."
-        az container create           --resource-group ${{ env.RESOURCE_GROUP }}           --name austentel-acs           --image ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --cpu 1           --memory 2           --public-ip-address ${{ env.CLOUDFLARE_IP }}           --restart-policy Always           --environment-variables             NODE_ENV=production             REACT_APP_VERSION=${{ github.sha }}             REACT_APP_BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo "🚀 Creating container..."
+        az container create           --resource-group ${{ env.RESOURCE_GROUP }}           --name austentel-acs           --image ${{ env.REGISTRY_LOGIN_SERVER }}/austentel:latest           --registry-username ${{ secrets.REGISTRY_USERNAME }}           --registry-password ${{ secrets.REGISTRY_PASSWORD }}           --ports 80           --cpu 1           --memory 2           --public-ip-address ${{ env.CLOUDFLARE_IP }}           --restart-policy Always           --environment-variables NODE_ENV=production
         
-        echo "⏳ Waiting for container to be ready..."
+        echo "🧪 Health check..."
         sleep 30
-        
-        echo "🧪 Testing deployment..."
         if curl -f http://${{ env.CLOUDFLARE_IP }}/health; then
           echo "✅ Deployment successful!"
-          echo "🌐 Application available at: https://acs1.austentel.com"
         else
           echo "❌ Health check failed"
           exit 1
