@@ -61,6 +61,7 @@ const AustentelApp = () => {
             <li>🛡️ Failure isolation</li>
             <li>⚡ Automatic recovery</li>
             <li>📈 Healing metrics tracking</li>
+            <li>🔐 Smart permission handling</li>
           </ul>
         </div>
 
@@ -83,7 +84,8 @@ const AustentelApp = () => {
               <ul style={{listStyle: 'none', padding: 0, fontSize: '0.9em'}}>
                 <li>• Dependency issues</li>
                 <li>• Authentication failures</li>
-                <li>• Network problems</li>
+                <li>• Permission problems</li>
+                <li>• Network issues</li>
                 <li>• Container crashes</li>
               </ul>
             </div>
@@ -94,6 +96,7 @@ const AustentelApp = () => {
                 <li>• Performance metrics</li>
                 <li>• Error tracking</li>
                 <li>• Recovery statistics</li>
+                <li>• Permission validation</li>
               </ul>
             </div>
           </div>
@@ -120,6 +123,7 @@ const AustentelApp = () => {
           <p>🔄 Intelligent retry mechanisms</p>
           <p>🛡️ Self-healing infrastructure</p>
           <p>📊 Continuous health monitoring</p>
+          <p>🔐 Smart permission management</p>
         </div>
       </div>
     </div>

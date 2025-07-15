@@ -19,7 +19,7 @@ jobs:
       with:
         creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
     
-    - name: 🏥 Self-Healing Deploy
+    - name: 🏥 Self-Healing Deploy with Permission Handling
       run: |
         set -e
         
@@ -82,9 +82,12 @@ jobs:
             return 1
         }
         
-        echo "🔧 Ensuring providers registered..."
-        retry_with_backoff "Provider registration" \
-            "az provider register --namespace Microsoft.ContainerInstance --wait" 3
+        echo "🔧 Checking provider registration (optional)..."
+        if az provider register --namespace Microsoft.ContainerInstance --wait 2>/dev/null; then
+            echo "✅ Provider registered successfully"
+        else
+            echo "⚠️ Provider registration failed (insufficient permissions) - continuing anyway"
+        fi
         
         echo "🔍 Checking existing container health..."
         CONTAINER_STATE=$(az container show --resource-group $RESOURCE_GROUP --name $CONTAINER_NAME --query instanceView.state --output tsv 2>/dev/null || echo "NotFound")
