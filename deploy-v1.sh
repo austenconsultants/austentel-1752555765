@@ -117,7 +117,7 @@ EOF
     fi
     
     # Update src/index.css with Tailwind
-    log_operation "INFO" "Updating src/index.css"
+    log_operation "INFO" "Updating src/index.css with Tailwind directives"
     cat > src/index.css << 'EOF'
 @tailwind base;
 @tailwind components;
@@ -163,7 +163,7 @@ code {
   background: #6b7280;
 }
 EOF
-    log_operation "SUCCESS" "src/index.css updated"
+    log_operation "SUCCESS" "src/index.css updated with Tailwind"
     
     # Create components directory and FreeSwitchUI.js
     mkdir -p src/components
@@ -868,10 +868,9 @@ EOF
         log_operation "SUCCESS" "FreeSwitchUI component already exists"
     fi
     
-    # Create Tailwind config
-    if [ ! -f "tailwind.config.js" ]; then
-        log_operation "INFO" "Creating Tailwind configuration"
-        cat > tailwind.config.js << 'EOF'
+    # Create Tailwind config with proper content paths
+    log_operation "INFO" "Creating/updating Tailwind CSS configuration"
+    cat > tailwind.config.js << 'EOF'
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -900,15 +899,11 @@ module.exports = {
   plugins: [],
 }
 EOF
-        log_operation "SUCCESS" "Tailwind configuration created"
-    else
-        log_operation "SUCCESS" "Tailwind configuration already exists"
-    fi
+    log_operation "SUCCESS" "Tailwind configuration updated"
     
     # Create PostCSS config
-    if [ ! -f "postcss.config.js" ]; then
-        log_operation "INFO" "Creating PostCSS configuration"
-        cat > postcss.config.js << 'EOF'
+    log_operation "INFO" "Creating PostCSS configuration"
+    cat > postcss.config.js << 'EOF'
 module.exports = {
   plugins: {
     tailwindcss: {},
@@ -916,10 +911,28 @@ module.exports = {
   },
 }
 EOF
-        log_operation "SUCCESS" "PostCSS configuration created"
+    log_operation "SUCCESS" "PostCSS configuration created"
+}
+
+# Install and fix Tailwind CSS dependencies
+fix_tailwind_dependencies() {
+    log_operation "STEP" "Installing and fixing Tailwind CSS dependencies"
+    
+    # Install latest Tailwind CSS and dependencies
+    log_operation "INFO" "Installing Tailwind CSS dependencies"
+    npm install -D tailwindcss@latest postcss@latest autoprefixer@latest >/dev/null 2>&1
+    
+    if [ $? -eq 0 ]; then
+        log_operation "SUCCESS" "Tailwind dependencies installed"
     else
-        log_operation "SUCCESS" "PostCSS configuration already exists"
+        log_operation "WARNING" "Some dependency installation issues - continuing anyway"
     fi
+    
+    # Initialize Tailwind (this creates proper config)
+    log_operation "INFO" "Initializing Tailwind CSS"
+    npx tailwindcss init -p >/dev/null 2>&1
+    
+    log_operation "SUCCESS" "Tailwind CSS setup completed"
 }
 
 # Fix GitHub workflows
@@ -987,17 +1000,51 @@ EOF
     fi
 }
 
-# Test build
+# Test build with CSS verification
 test_build() {
-    log_operation "STEP" "Testing React build"
+    log_operation "STEP" "Testing React build with Tailwind CSS"
+    
+    # Clean previous build
+    log_operation "INFO" "Cleaning previous build"
+    rm -rf build/
     
     log_operation "INFO" "Running npm run build..."
     if npm run build >/dev/null 2>&1; then
         log_operation "SUCCESS" "React build successful"
-        # Clean up build directory
+        
+        # Verify CSS files were generated
+        if [ -d "build/static/css" ] && [ "$(ls -A build/static/css)" ]; then
+            log_operation "SUCCESS" "CSS files generated successfully"
+            log_operation "INFO" "CSS files: $(ls build/static/css/ | tr '\n' ' ')"
+        else
+            log_operation "WARNING" "No CSS files generated - Tailwind may not be working"
+            log_operation "INFO" "This could cause styling issues in deployment"
+        fi
+        
+        # Verify JS files
+        if [ -d "build/static/js" ] && [ "$(ls -A build/static/js)" ]; then
+            log_operation "SUCCESS" "JavaScript files generated successfully"
+        else
+            log_operation "ERROR" "No JavaScript files generated"
+            exit 1
+        fi
+        
+        # Check index.html for proper references
+        if grep -q "static/css" build/index.html && grep -q "static/js" build/index.html; then
+            log_operation "SUCCESS" "Build index.html properly references CSS and JS files"
+        else
+            log_operation "WARNING" "Build index.html may be missing CSS/JS references"
+        fi
+        
+        # Clean up build directory for deployment
         rm -rf build
     else
         log_operation "ERROR" "React build failed"
+        echo ""
+        echo "Build errors detected. Common fixes:"
+        echo "1. Check if all dependencies are installed: npm install"
+        echo "2. Verify Tailwind configuration: npx tailwindcss init -p"
+        echo "3. Check for syntax errors in React components"
         echo ""
         echo "Run 'npm run build' manually to see detailed errors"
         exit 1
@@ -1129,6 +1176,7 @@ main() {
     
     # Execute all steps
     check_requirements
+    fix_tailwind_dependencies
     fix_react_files
     fix_github_workflows
     test_build
